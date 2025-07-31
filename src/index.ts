@@ -4,46 +4,34 @@ import path from 'path';
 import fs from 'fs';
 
 const app = express();
-const port = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Multer config: files saved in 'uploads' folder with random filenames
-const upload = multer({ dest: path.join(__dirname, '..', 'uploads') });
+// Create uploads folder if it doesn't exist
+const uploadPath = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath);
 
-// Make sure uploads folder exists
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+// Configure multer
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadPath);
+  },
+  filename: (_req, file, cb) => {
+    cb(null, file.originalname);
+  }
+});
+const upload = multer({ storage });
 
-// Upload endpoint: POST /upload
+// Serve uploaded files statically
+app.use('/uploads', express.static(uploadPath));
+
+// Upload endpoint
 app.post('/upload', upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-  }
-  res.send({
-    message: 'File uploaded successfully',
-    filename: req.file.filename, // this is the saved filename (random)
-    originalName: req.file.originalname
-  });
+  if (!req.file) return res.status(400).send('No file uploaded.');
+  const fileUrl = `/uploads/${req.file.filename}`;
+  res.send(`File uploaded successfully. Access it at: ${fileUrl}`);
 });
 
-// Download endpoint: GET /download/:filename
-app.get('/download/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(uploadDir, filename);
-
-  if (fs.existsSync(filePath)) {
-    res.download(filePath, (err) => {
-      if (err) {
-        res.status(500).send('Error downloading file');
-      }
-    });
-  } else {
-    res.status(404).send('File not found');
-  }
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
 });
-
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
-});
-
